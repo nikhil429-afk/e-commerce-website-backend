@@ -1,4 +1,6 @@
 from pydantic import BaseModel
+from typing import Optional
+
 
 class OrderResponse(BaseModel):
     id: int
@@ -6,18 +8,16 @@ class OrderResponse(BaseModel):
     user_name: str
     userEmail: str
     category: str
-    price: int
+    price: float
     quantity: int
     total_price: float
     in_stock: bool
     created_at: str
     status: str
 
-
-class OrderStatusUpdate(BaseModel):
-    status: str
-
-
     class Config:
         from_attributes = True
 
+
+class OrderStatusUpdate(BaseModel):
+    status: str
