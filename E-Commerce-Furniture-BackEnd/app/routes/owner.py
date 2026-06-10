@@ -2,7 +2,6 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from typing import Optional
 from pydantic import BaseModel
-
 from app.schema.register import User
 from app.schema.product import Product
 from app.models.product import CreateProduct
