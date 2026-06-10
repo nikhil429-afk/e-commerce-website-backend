@@ -11,7 +11,7 @@ os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 async def upload_room(file: UploadFile = File(...)):
     allowed_types = ["image/jpeg", "image/png", "image/jpg", "image/webp"]
     if file.content_type not in allowed_types:
-        raise HTTPException(status_code=400, detail="Only JPG, JPEG, PNG and WEBP images are allowed")
+        raise HTTPException(status_code=400, detail="Only JPG, JPEG, PNG and WEBP Images are Allowed!")
 
     file_extension = file.filename.split(".")[-1]
     unique_filename = f"{uuid.uuid4()}.{file_extension}"
