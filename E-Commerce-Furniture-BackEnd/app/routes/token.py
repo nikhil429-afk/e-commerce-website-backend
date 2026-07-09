@@ -18,7 +18,6 @@ def refresh_token(refresh_token: str, db: Session = Depends(get_db)):
         if payload.get("type") != "refresh":
             raise HTTPException(status_code=401, detail="Invalid Refresh Token")
 
-        # Re-fetch user to get latest data and build full payload
         user_id = payload.get("id")
         if not user_id:
             raise HTTPException(status_code=401, detail="Invalid token payload")
@@ -27,7 +26,6 @@ def refresh_token(refresh_token: str, db: Session = Depends(get_db)):
         if not user:
             raise HTTPException(status_code=401, detail="User not found")
 
-        # New access token carries all user details, same as login
         new_access_token = create_access_token({
             "id": user.id,
             "username": user.username,

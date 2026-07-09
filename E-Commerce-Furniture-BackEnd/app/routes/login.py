@@ -5,7 +5,7 @@ from passlib.context import CryptContext
 
 from app.core.database import get_db
 from app.schema.register import User
-from app.core.security import create_access_token, create_refresh_token
+from app.core.security import create_access_token
 
 
 router = APIRouter(prefix="/login", tags=["Login"])
@@ -34,12 +34,10 @@ def login(data: LoginRequest, db: Session = Depends(get_db)):
 
     access_token = create_access_token({"id": user.id, "username": user.username, "email": user.email, "role": user.role})
 
-    refresh_token = create_refresh_token({"id": user.id, "username": user.username, "email": user.email, "role": user.role})
 
     return {
         "message": "Login Successful",
         "access_token": access_token,
-        "refresh_token": refresh_token,
         "role": user.role,
         "user": {
             "id": user.id,
@@ -48,3 +46,4 @@ def login(data: LoginRequest, db: Session = Depends(get_db)):
             "role": user.role
         }
     }
+

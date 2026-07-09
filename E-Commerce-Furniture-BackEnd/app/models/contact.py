@@ -16,3 +16,4 @@ class ContactResponse(ContactCreate):
 
     class Config:
         from_attributes = True
+

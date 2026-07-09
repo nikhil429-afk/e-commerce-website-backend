@@ -4,7 +4,7 @@ from typing import Optional
 from pydantic import BaseModel
 from app.schema.register import User
 from app.schema.product import Product
-from app.models.product import CreateProduct
+from app.models.product import CreateProduct, ProductUpdate
 from app.schema.order import Order
 from app.models.order import OrderStatusUpdate
 from app.schema.contact import Contact
@@ -92,17 +92,6 @@ def create_product(data: CreateProduct, db: Session = Depends(get_db), owner=Dep
     db.refresh(new_product)
     return _product_dict(new_product)
 
-
-class ProductUpdate(BaseModel):
-    name: Optional[str] = None
-    image: Optional[str] = None
-    category: Optional[str] = None
-    price: Optional[float] = None
-    oldPrice: Optional[float] = None
-    rating: Optional[int] = None
-    tag: Optional[str] = None
-    description: Optional[str] = None
-    in_stock: Optional[bool] = None
 
 
 @router.patch("/products/{product_id}")
