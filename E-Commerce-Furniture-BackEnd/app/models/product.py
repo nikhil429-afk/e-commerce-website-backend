@@ -18,6 +18,19 @@ class ProductResponse(BaseModel):
         from_attributes = True
 
 
+
+class ProductUpdate(BaseModel):
+    name: Optional[str] = None
+    image: Optional[str] = None
+    category: Optional[str] = None
+    price: Optional[float] = None
+    oldPrice: Optional[float] = None
+    rating: Optional[int] = None
+    tag: Optional[str] = None
+    description: Optional[str] = None
+    in_stock: Optional[bool] = None
+
+
 class CreateProduct(BaseModel):
     name: str
     category: str
