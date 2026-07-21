@@ -10,3 +10,5 @@ pydantic[email]
 alembic
 python-multipart
 passlib[bcrypt]
+google-genai
+scikit-Learn

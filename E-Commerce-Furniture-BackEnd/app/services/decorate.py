@@ -1,12 +1,13 @@
-from fastapi import (APIRouter, UploadFile, File, HTTPException, Depends )
-from app.core.security import verify_api_key
+from fastapi import (APIRouter, UploadFile, File, HTTPException )
 from fastapi.responses import JSONResponse
-from dotenv import load_dotenv
+from pydantic import BaseModel
 from google.genai import types
-from google import genai
-from PIL import Image
+from dotenv import load_dotenv
 import os, io, uuid, json
-import traceback
+from google import genai
+from typing import List
+from PIL import Image
+# import traceback
 
 load_dotenv()
 
@@ -25,8 +26,16 @@ def gemini_client():
         raise HTTPException(status_code=500, detail="GOOGLE_API_KEY Not Found!")
     return genai.Client(api_key=api_key)
 
+class EmptySpace(BaseModel):
+    description: str
+    box_2d: List[int]       # <--- [ymin,xmin,ymax,xmax]
 
-@router.post("")
+class RoomAnalysisResponse(BaseModel):
+    success: bool = True
+    filename: str
+    empty_spaces: List[EmptySpace]
+
+@router.post("", response_model=RoomAnalysisResponse)
 async def upload_room(file: UploadFile = File(...)):
     # print(file.filename)
     # print(os.getenv("GOOGLE_API_KEY"))
@@ -51,22 +60,27 @@ async def upload_room(file: UploadFile = File(...)):
         client = gemini_client()
 
         prompt = """
+        You are an expert computer vision assistant.
         Analyze this room image.
-        Detect every large empty usable space where furniture can be placed.
-        Return ONLY valid JSON.
-        
-        Format: [
-            {
-                "description":"Empty floor near sofa",
-                "box_2d":[ymin,xmin,ymax,xmax]
-            }
-        ]
+        Detect every large empty usable area where furniture can realistically be placed.
+        For every empty region return:{
+        "description": "...",
+        "box_2d":[ymin,xmin,ymax,xmax]
+        }
+        Rules:
+        - box_2d MUST contain exactly four integers.
+        - Coordinates are relative to a 1000 x 1000 image.
+        - ymin < ymax
+        - xmin < xmax
+        - Return ONLY JSON.
+        - Do NOT explain anything.
+        - Do NOT use markdown.
         """
 
         response = client.models.generate_content(model="gemini-2.5-flash", contents=[image, prompt],
             config=types.GenerateContentConfig(response_mime_type="application/json", temperature=0.2)
         )
-
+        # print(response.text)
         try:
             analysis = json.loads(response.text)
         except Exception:
@@ -75,6 +89,7 @@ async def upload_room(file: UploadFile = File(...)):
         return JSONResponse(status_code=200, content={"success": True, "filename": filename, "analysis": analysis})
 
     except Exception as e:
-        traceback.print_exc()
+        # traceback.print_exc()
         print("Error", repr(e))
         raise HTTPException(status_code=500, detail=str(e))
+    
