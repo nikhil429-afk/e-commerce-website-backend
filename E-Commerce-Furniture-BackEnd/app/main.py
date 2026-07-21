@@ -3,7 +3,7 @@ from fastapi.exceptions import RequestValidationError
 from app.routes.token import router as token_router
 from app.routes.get_user import router as me_router
 from fastapi.middleware.cors import CORSMiddleware
-from app.services.ai_decorate import decorate
+from app.services import decorate
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import JSONResponse
 from fastapi import FastAPI, Request
