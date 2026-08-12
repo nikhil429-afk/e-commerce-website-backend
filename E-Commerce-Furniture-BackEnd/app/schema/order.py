@@ -18,3 +18,4 @@ class Order(Base):
     in_stock = Column(Boolean)
     created_at = Column(DateTime, default=datetime.utcnow)
     status = Column(String(50), default="pending")
+

@@ -10,7 +10,10 @@ router = APIRouter(prefix="/cart", tags=["Cart"])
 
 @router.get("/")
 def get_cart(db: Session = Depends(get_db), user=Depends(get_current_user)):
-    return db.query(Cart).filter(Cart.user_id == user.id).all()
+    try:
+        return db.query(Cart).filter(Cart.user_id == user.id).all()
+    except:
+        raise HTTPException(status_code=500, detail="Could not fetch cart items")
 
 
 @router.put("/{item_id}")
@@ -45,13 +48,16 @@ def add_to_cart(item_id: int, db: Session = Depends(get_db), user=Depends(get_cu
 
 @router.delete("/delete/{item_id}")
 def remove_from_cart(item_id: int, db: Session = Depends(get_db), user=Depends(get_current_user)):
-    item = db.query(Cart).filter(Cart.id == item_id, Cart.user_id == user.id).first()
+    try:
+        item = db.query(Cart).filter(Cart.id == item_id, Cart.user_id == user.id).first()
 
-    if not item:
-        raise HTTPException(status_code=404, detail="Item Not Found in Cart")
-    db.delete(item)
-    db.commit()
-    return {"message": "Item Removed from Cart"}
+        if not item:
+            raise HTTPException(status_code=404, detail="Item Not Found in Cart")
+        db.delete(item)
+        db.commit()
+        return {"message": "Item Removed from Cart"}
+    except:
+        raise HTTPException(status_code=500, detail="Unable to Delete Item from Cart")
 
 
 @router.patch("/increase/{item_id}")
