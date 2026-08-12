@@ -133,7 +133,7 @@ async def create_product(
     except Exception as e:
 
         import traceback
-        traceback.print_exc()
+        # traceback.print_exc()
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -217,12 +217,12 @@ def delete_product(product_id: int, db: Session = Depends(get_db), owner=Depends
 
 
 @router.get("/cart")
-def get_cart(db: Session = Depends(get_db)):
+def get_cart(db: Session = Depends(get_db), user=Depends(get_current_user)):
     return db.query(Cart).all()
 
 
 @router.get("/wishlist")
-def get_wishlist(db: Session = Depends(get_db)):
+def get_wishlist(db: Session = Depends(get_db), user=Depends(get_current_user)):
     return db.query(Wishlist).all()
 
 

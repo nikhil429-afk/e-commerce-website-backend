@@ -4,6 +4,7 @@ from app.schema.register import User
 from app.models.register import RegisterRequest
 from passlib.context import CryptContext
 from app.core.database import get_db
+from app.core.config import OWNER_EMAIL
 import re
 
 
@@ -35,9 +36,11 @@ def register(data: RegisterRequest, db: Session = Depends(get_db)):
     elif not re.match(email_pattern, data.email):
         error["email"] = "Invalid Email Format!"
 
-    OWNER_EMAILS = ["owner@furnisher.com"]
+    elif data.email == OWNER_EMAIL:
+        error["email"] = "This Email is reserved and cannot be Registered!"
 
-    role = "owner" if data.email in OWNER_EMAILS else "user"
+    # The owner credentials are set in .env file
+    role = "user"
 
     password_pattern = r"^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)[A-Za-z\d@$#%!]{8,15}$"
 
@@ -54,7 +57,7 @@ def register(data: RegisterRequest, db: Session = Depends(get_db)):
         raise HTTPException(status_code=400, detail=error)
 
     try:
-        existing_user = (db.query(User) .filter(User.email == data.email) .first())
+        existing_user = (db.query(User).filter(User.email == data.email).first())
 
         if existing_user:
             raise HTTPException(status_code=400, detail={"email": "This Email is already Registered!"})
@@ -72,5 +75,5 @@ def register(data: RegisterRequest, db: Session = Depends(get_db)):
         raise e
 
     except Exception as e:
-        print(e)
-        raise HTTPException(status_code=500, detail="Internal Server Error!")
+        # print(e)
+        raise HTTPException(status_code=500, detail={"error": "Internal Server Error!"})

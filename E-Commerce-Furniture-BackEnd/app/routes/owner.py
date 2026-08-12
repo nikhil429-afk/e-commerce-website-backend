@@ -22,9 +22,7 @@ class UserUpdate(BaseModel):
 @router.get("/users")
 def get_all_users(db: Session = Depends(get_db), owner=Depends(require_owner)):
     users = db.query(User).all()
-    return [{ "id": u.id, "username": u.username, "email": u.email, "role": u.role, }
-        for u in users
-    ]
+    return [[u.id, u.username, u.email, u.role,] for u in users ]
 
 
 @router.patch("/users/{user_id}")
@@ -41,7 +39,7 @@ def update_user(user_id: int, data: UserUpdate, db: Session = Depends(get_db), o
 
     db.commit()
     db.refresh(user)
-    return {"id": user.id, "username": user.username, "email": user.email, "role": user.role, }
+    return [ user.id, user.username, user.email, user.role, ]
 
 
 @router.delete("/users/{user_id}")
@@ -59,19 +57,52 @@ def delete_user(user_id: int, db: Session = Depends(get_db), owner=Depends(requi
 @router.get("/products")
 def get_all_products(db: Session = Depends(get_db), owner=Depends(require_owner)):
     products = db.query(Product).all()
-    return [_product_dict(p) for p in products]
+    return [
+        [
+            p.id,
+            p.name,
+            p.image,
+            p.category,
+            p.price,
+            p.oldPrice,
+            p.rating,
+            p.tag,
+            p.description,
+            p.in_stock,
+        ] for p in products
+    ]
 
 
 @router.get("/contact")
 def get_all_contacts(db: Session = Depends(get_db), owner=Depends(require_owner)):
     contacts = db.query(Contact).all()
-    return [_contact_dict(c) for c in contacts]
+    return [
+        [
+            c.id,
+            c.name,
+            c.email,
+            c.phone,
+            c.subject,
+            c.message,
+        ]
+        for c in contacts
+    ]
 
 
 @router.get("/appointments")
 def get_all_appointments(db: Session = Depends(get_db), owner=Depends(require_owner)):
     appointments = db.query(Contact).filter(Contact.subject == "Showroom Visit").all()
-    return [appointment_dict(a) for a in appointments]
+    return [
+        [
+            a.id,
+            a.name,
+            a.email,
+            a.phone,
+            a.message,
+            a.appointment_date,
+        ]
+        for a in appointments
+    ]
 
 
 @router.post("/products")
@@ -90,7 +121,18 @@ def create_product(data: CreateProduct, db: Session = Depends(get_db), owner=Dep
     db.add(new_product)
     db.commit()
     db.refresh(new_product)
-    return _product_dict(new_product)
+    return [
+    new_product.id,
+    new_product.name,
+    new_product.image,
+    new_product.category,
+    new_product.price,
+    new_product.oldPrice,
+    new_product.rating,
+    new_product.tag,
+    new_product.description,
+    new_product.in_stock,
+    ]
 
 
 
@@ -113,7 +155,18 @@ def update_product(product_id: int, data: ProductUpdate, db: Session = Depends(g
 
     db.commit()
     db.refresh(product)
-    return _product_dict(product)
+    return [
+    product.id,
+    product.name,
+    product.image,
+    product.category,
+    product.price,
+    product.oldPrice,
+    product.rating,
+    product.tag,
+    product.description,
+    product.in_stock,
+    ]
 
 
 @router.delete("/products/{product_id}")
@@ -125,13 +178,26 @@ def delete_product(product_id: int, db: Session = Depends(get_db), owner=Depends
 
     db.delete(product)
     db.commit()
-    return {"message": "Product deleted successfully"}
+    return {"message": "Product deleted Successfully"}
 
 
 @router.get("/orders")
 def get_all_orders(db: Session = Depends(get_db), owner=Depends(require_owner)):
     orders = db.query(Order).all()
-    return [_order_dict(o) for o in orders]
+    return [
+        [
+            o.id,
+            o.user_name,
+            o.userEmail,
+            o.name,
+            o.category,
+            o.price,
+            o.quantity,
+            o.total_price,
+            o.in_stock,
+            o.status,
+        ] for o in orders
+    ]
 
 
 @router.patch("/orders/{order_id}")
@@ -145,50 +211,19 @@ def update_order_status(order_id: int, data: OrderStatusUpdate, db: Session = De
 
     db.commit()
     db.refresh(order)
+    return [
+    order.id,
+    order.user_name,
+    order.userEmail,
+    order.name,
+    order.category,
+    order.price,
+    order.quantity,
+    order.total_price,
+    order.in_stock,
+    order.status,
+    ]
 
-    return { "message": f"Order status updated to {data.status}", "order": _order_dict(order)}
-
-
-
-def _product_dict(p) -> dict:
-    return {
-        "id": p.id,
-        "name": p.name or "",
-        "image": p.image or "",
-        "category": p.category or "",
-        "price": p.price or 0,
-        "oldPrice": p.oldPrice or 0,
-        "rating": p.rating or 0,
-        "tag": p.tag or "",
-        "description": p.description or "",
-        "in_stock": p.in_stock if p.in_stock is not None else True,
-    }
-
-
-def _order_dict(o) -> dict:
-    return {
-        "id": o.id,
-        "user_name": o.user_name or "",
-        "userEmail": o.userEmail or "",
-        "name": o.name or "",
-        "category": o.category or "",
-        "price": o.price or 0,
-        "quantity": o.quantity or 1,
-        "total_price": o.total_price or 0,
-        "in_stock": o.in_stock if o.in_stock is not None else True,
-        "status": "pending" if (o.in_stock is None or o.in_stock) else "shipped",
-    }
-
-
-def _contact_dict(c) -> dict:
-    return {
-        "id": c.id,
-        "name": c.name,
-        "email": c.email,
-        "phone": c.phone,
-        "subject": c.subject,
-        "message": c.message,
-    }
 
 
 def appointment_dict(c) -> dict:

@@ -1,6 +1,5 @@
 from app.routes import (dashboard, product, cart, register, wishlist, order, owner, about, contact, login, charts)
 from fastapi.exceptions import RequestValidationError
-from app.routes.token import router as token_router
 from app.routes.get_user import router as me_router
 from fastapi.middleware.cors import CORSMiddleware
 from app.services import decorate
@@ -39,8 +38,6 @@ app.add_middleware( CORSMiddleware,
 
 
 
-app.include_router(token_router)
-
 app.include_router(dashboard.router)
 
 app.include_router(owner.router)
@@ -68,3 +65,4 @@ app.include_router(charts.router)
 app.include_router(decorate.router)
 
 app.include_router(me_router)
+
