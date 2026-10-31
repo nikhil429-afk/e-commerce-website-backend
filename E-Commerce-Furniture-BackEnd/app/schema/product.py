@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Float, ForeignKey, Boolean
+from sqlalchemy import Column, Integer, String, Float, ForeignKey, Boolean, Text
 from pydantic import BaseModel
 from app.core.database import Base
 
@@ -13,7 +13,7 @@ class Product(Base):
     oldPrice = Column(Float)
     tag = Column(String(100))
     rating = Column(Integer, nullable=True)
-    description = Column(String(191))
+    description = Column(Text)
     in_stock = Column(Boolean, default=True)
     
 

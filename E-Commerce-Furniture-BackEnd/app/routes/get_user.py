@@ -11,4 +11,7 @@ def me(current_user=Depends(get_current_user)):
         "username": current_user.username,
         "email": current_user.email,
         "role": current_user.role,
+        "avatar_url": current_user.avatar_url,
+        "phone": current_user.phone,
+        "address": current_user.address,
     }

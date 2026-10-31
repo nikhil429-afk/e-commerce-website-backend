@@ -1,45 +1,46 @@
 from fastapi import APIRouter, HTTPException, Depends
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 from app.schema.register import User
 from app.models.register import RegisterRequest
-from passlib.context import CryptContext
 from app.core.database import get_db
+from app.core.security import hash_password
 from app.core.config import OWNER_EMAIL
+import logging
 import re
 
+log = logging.getLogger("register")
 
 router = APIRouter(prefix="/register", tags=["register"])
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
-def hash_password(password: str):
-    return pwd_context.hash(password)
-
-
-@router.post('/')
+@router.post("/")
 def register(data: RegisterRequest, db: Session = Depends(get_db)):
 
     error = {}
     username_pattern = r"^[a-zA-Z]{3,50}$"
 
-    if not data.username:
+    username = (data.username or "").strip()
+    email = (data.email or "").strip().lower()      # always lower case: MySQL emails are case-insensitive
+
+    if not username:
         error["username"] = "Username should not be Empty!"
 
-    elif not re.match(username_pattern, data.username):
+    elif not re.match(username_pattern, username):
         error["username"] = "Username must be 3-50 letters Only!"
 
-    email_pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+    email_pattern = r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$"
 
-    if not data.email:
+    if not email:
         error["email"] = "Email should not be Empty!"
 
-    elif not re.match(email_pattern, data.email):
+    elif not re.match(email_pattern, email):
         error["email"] = "Invalid Email Format!"
 
-    elif data.email == OWNER_EMAIL:
+    elif email == OWNER_EMAIL:
         error["email"] = "This Email is reserved and cannot be Registered!"
 
-    # The owner credentials are set in .env file
+    # Registration can only ever create normal users. The owner is created from .env at start-up.
     role = "user"
 
     password_pattern = r"^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)[A-Za-z\d@$#%!]{8,15}$"
@@ -48,7 +49,7 @@ def register(data: RegisterRequest, db: Session = Depends(get_db)):
         error["pwd"] = "Password should not be Empty!"
 
     elif not re.match(password_pattern, data.pwd):
-        error["pwd"] = ("Password must contain Uppercase," "Lowercase, Number. (8-15 Characters)!")
+        error["pwd"] = "Password must contain Uppercase, Lowercase, Number. (8-15 Characters)!"
 
     if data.pwd != data.conf_pwd:
         error["conf_pwd"] = "Passwords didn't Match!"
@@ -56,24 +57,19 @@ def register(data: RegisterRequest, db: Session = Depends(get_db)):
     if error:
         raise HTTPException(status_code=400, detail=error)
 
+    existing_user = db.query(User).filter(func.lower(User.email) == email).first()
+
+    if existing_user:
+        raise HTTPException(status_code=400, detail={"email": "This Email is already Registered!"})
+
     try:
-        existing_user = (db.query(User).filter(User.email == data.email).first())
-
-        if existing_user:
-            raise HTTPException(status_code=400, detail={"email": "This Email is already Registered!"})
-
-        hashed_password = hash_password(data.pwd)
-        new_user = User(username=data.username, email=data.email, password=hashed_password, role=role)
-
+        new_user = User(username=username, email=email, password=hash_password(data.pwd), role=role, auth_provider="password")
         db.add(new_user)
         db.commit()
         db.refresh(new_user)
-
-        return {"message": f"{data.username} Registration Successful!"}
-
-    except HTTPException as e:
-        raise e
-
-    except Exception as e:
-        # print(e)
+    except Exception:
+        db.rollback()
+        log.exception("Registration failed")
         raise HTTPException(status_code=500, detail={"error": "Internal Server Error!"})
+
+    return {"message": f"{username} Registration Successful!"}

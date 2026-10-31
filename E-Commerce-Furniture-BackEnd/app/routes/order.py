@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException
+import logging
 from app.core.security import get_current_user
 from app.schema.product import Product
 from app.core.database import get_db
@@ -60,7 +61,8 @@ def create_order(db: Session = Depends(get_db), user=Depends(get_current_user)):
 
     except Exception as e:
         db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        logging.getLogger("orders").exception("Order failed")
+        raise HTTPException(status_code=500, detail="Could not place the order. Nothing was charged or changed.")
 
 
 @router.post("/checkout/{item_id}")
@@ -99,7 +101,8 @@ def checkout_single_item(item_id: int, db: Session = Depends(get_db), user=Depen
 
     except Exception as e:
         db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        logging.getLogger("orders").exception("Order failed")
+        raise HTTPException(status_code=500, detail="Could not place the order. Nothing was charged or changed.")
 
 
 @router.delete("/{order_id}")

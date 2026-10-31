@@ -1,7 +1,8 @@
-# Environment files
+venv/
+.venv/
+__pycache__/
+*.pyc
 .env
 .env.*
-
-# Python cache
-__pycache__/
-*.py[cod]
+!.env.example
+uploads/

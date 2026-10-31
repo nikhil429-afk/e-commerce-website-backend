@@ -1,9 +1,12 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from typing import Optional
-from pydantic import BaseModel
+from typing import Optional, Literal
+from pydantic import BaseModel, Field
+from sqlalchemy.exc import IntegrityError
 from app.schema.register import User
-from app.schema.product import Product
+from app.schema.product import Product, Images
+from app.schema.cart import Cart
+from app.schema.wishlist import Wishlist
 from app.models.product import CreateProduct, ProductUpdate
 from app.schema.order import Order
 from app.models.order import OrderStatusUpdate
@@ -15,8 +18,8 @@ router = APIRouter(prefix="/owner", tags=["Owner"])
 
 
 class UserUpdate(BaseModel):
-    username: Optional[str] = None
-    role: Optional[str] = None
+    username: Optional[str] = Field(default=None, min_length=1, max_length=100)
+    role: Optional[Literal["user", "owner"]] = None
 
 
 @router.get("/users")
@@ -32,8 +35,11 @@ def update_user(user_id: int, data: UserUpdate, db: Session = Depends(get_db), o
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
+    if data.role is not None and user.id == owner.id and data.role != "owner":
+        raise HTTPException(status_code=400, detail="You cannot remove your own owner access.")
+
     if data.username is not None:
-        user.username = data.username
+        user.username = data.username.strip()
     if data.role is not None:
         user.role = data.role
 
@@ -49,8 +55,17 @@ def delete_user(user_id: int, db: Session = Depends(get_db), owner=Depends(requi
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
-    db.delete(user)
-    db.commit()
+    if user.id == owner.id:
+        raise HTTPException(status_code=400, detail="You cannot delete your own owner account.")
+
+    try:
+        db.query(Cart).filter(Cart.user_id == user.id).delete()
+        db.query(Wishlist).filter(Wishlist.user_id == user.id).delete()
+        db.delete(user)
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=409, detail="This user still has orders or messages, so the account cannot be deleted.")
     return {"message": "User deleted successfully"}
 
 
@@ -176,6 +191,9 @@ def delete_product(product_id: int, db: Session = Depends(get_db), owner=Depends
     if not product:
         raise HTTPException(status_code=404, detail="Product not found")
 
+    db.query(Images).filter(Images.product_id == product.id).delete()
+    db.query(Cart).filter(Cart.product_id == product.id).delete()
+    db.query(Wishlist).filter(Wishlist.product_id == product.id).delete()
     db.delete(product)
     db.commit()
     return {"message": "Product deleted Successfully"}
