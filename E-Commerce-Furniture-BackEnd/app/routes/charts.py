@@ -1,6 +1,4 @@
-from unittest import result
-
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from datetime import datetime, timedelta
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
@@ -8,6 +6,18 @@ from app.core.security import require_owner
 from app.core.database import get_db
 from app.schema.order import Order
 from app.schema.register import User
+
+def _parse_range(start: str, end: str):
+    """[start, end] inclusive of the whole end day, tolerant of a trailing Z; 400 on bad input."""
+    try:
+        start_date = datetime.fromisoformat(start.replace("Z", ""))
+        end_date = datetime.fromisoformat(end.replace("Z", ""))
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid date. Use YYYY-MM-DD.")
+    if start_date > end_date:
+        start_date, end_date = end_date, start_date
+    return start_date, end_date + timedelta(days=1)
+
 
 class DateRange(BaseModel):
     start_day: datetime
@@ -18,13 +28,7 @@ router = APIRouter(prefix="/owner", tags=["Charts"])
 
 @router.get("/orders/chart")
 def orders_chart(start: str, end: str, db: Session = Depends(get_db), owner=Depends(require_owner)):
-    start_date = datetime.fromisoformat(start.replace("Z", ""))
-    end_date = datetime.fromisoformat(end.replace("Z", "")) + timedelta(days=1)
-
-    if start_date > end_date:
-        start_date, end_date = end_date, start_date
-
-    end_date += timedelta(days=1)
+    start_date, end_date = _parse_range(start, end)
 
     orders = (db.query(Order).filter(Order.created_at >= start_date).filter(Order.created_at < end_date).all())
 
@@ -39,14 +43,8 @@ def orders_chart(start: str, end: str, db: Session = Depends(get_db), owner=Depe
 
 @router.get("/users/chart")
 def users_chart(start: str, end: str, db: Session = Depends(get_db), owner=Depends(require_owner)):
-    start_date = datetime.fromisoformat(start.replace("Z", ""))
-    end_date = datetime.fromisoformat(end.replace("Z", "")) + timedelta(days=1)
+    start_date, end_date = _parse_range(start, end)
 
-    if start_date > end_date:
-        start_date, end_date = end_date, start_date
-
-    end_date += timedelta(days=1)
-    
     users = (db.query(User).filter(User.created_at >= start_date).filter(User.created_at < end_date).all())
     
     daily_users = {}

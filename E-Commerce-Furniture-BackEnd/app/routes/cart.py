@@ -10,24 +10,26 @@ router = APIRouter(prefix="/cart", tags=["Cart"])
 
 @router.get("/")
 def get_cart(db: Session = Depends(get_db), user=Depends(get_current_user)):
-    try:
-        return db.query(Cart).filter(Cart.user_id == user.id).all()
-    except:
-        raise HTTPException(status_code=500, detail="Could not fetch cart items")
+    return db.query(Cart).filter(Cart.user_id == user.id).all()
 
 
 @router.put("/{item_id}")
 def add_to_cart(item_id: int, db: Session = Depends(get_db), user=Depends(get_current_user)):
-    existing = db.query(Cart).filter(Cart.product_id == item_id, Cart.user_id == user.id).first()
-    if existing:
-        existing.quantity += 1
-        db.commit()
-        db.refresh(existing)
-        return existing
-
     product = db.query(Product).filter(Product.id == item_id).first()
     if not product:
         raise HTTPException(status_code=404, detail="Product not found")
+
+    if product.in_stock is False:
+        raise HTTPException(status_code=400, detail="This product is out of stock")
+
+    existing = db.query(Cart).filter(Cart.product_id == item_id, Cart.user_id == user.id).first()
+    if existing:
+        if (existing.quantity or 1) >= 8:
+            raise HTTPException(status_code=400, detail="Maximum Quantity Limit is 8")
+        existing.quantity = (existing.quantity or 1) + 1
+        db.commit()
+        db.refresh(existing)
+        return existing
 
     new_item = Cart(
         product_id  = item_id,
@@ -48,16 +50,13 @@ def add_to_cart(item_id: int, db: Session = Depends(get_db), user=Depends(get_cu
 
 @router.delete("/delete/{item_id}")
 def remove_from_cart(item_id: int, db: Session = Depends(get_db), user=Depends(get_current_user)):
-    try:
-        item = db.query(Cart).filter(Cart.id == item_id, Cart.user_id == user.id).first()
+    item = db.query(Cart).filter(Cart.id == item_id, Cart.user_id == user.id).first()
 
-        if not item:
-            raise HTTPException(status_code=404, detail="Item Not Found in Cart")
-        db.delete(item)
-        db.commit()
-        return {"message": "Item Removed from Cart"}
-    except:
-        raise HTTPException(status_code=500, detail="Unable to Delete Item from Cart")
+    if not item:
+        raise HTTPException(status_code=404, detail="Item Not Found in Cart")
+    db.delete(item)
+    db.commit()
+    return {"message": "Item Removed from Cart"}
 
 
 @router.patch("/increase/{item_id}")

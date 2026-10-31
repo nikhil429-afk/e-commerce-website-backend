@@ -3,7 +3,7 @@ from jose import JWTError, jwt, ExpiredSignatureError
 from fastapi import Depends, HTTPException
 from fastapi.security import APIKeyHeader
 from datetime import datetime, timedelta
-from passlib.context import CryptContext
+import bcrypt
 from app.schema.register import User
 from app.core.database import get_db
 from sqlalchemy.orm import Session
@@ -12,19 +12,25 @@ from app.core.config import SECRET_KEY, ALGORITHM, ACCESS_TOKEN_EXPIRE_MINUTES
 
 security = HTTPBearer()
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 
 API_KEY_NAME = "GOOGLE_API_KEY"
 api_key_header = APIKeyHeader(name=API_KEY_NAME, auto_error=False)      # <--- This is the API KEY's header name
 
 
-def hash_password(password: str):
-    return pwd_context.hash(password)
+def hash_password(password: str) -> str:
+    # bcrypt only looks at the first 72 bytes
+    return bcrypt.hashpw(password.encode("utf-8")[:72], bcrypt.gensalt()).decode("utf-8")
 
 
-def verify_password(plain: str, hashed: str):
-    return pwd_context.verify(plain, hashed)
+def verify_password(plain: str, hashed) -> bool:
+    """Never raises: accounts without a password (Google sign-in) or bad hashes just fail."""
+    if not plain or not hashed:
+        return False
+    try:
+        return bcrypt.checkpw(plain.encode("utf-8")[:72], hashed.encode("utf-8"))
+    except (ValueError, TypeError):
+        return False
 
 
 def create_access_token(data: dict):

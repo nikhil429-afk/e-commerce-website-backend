@@ -4,11 +4,12 @@ sqlalchemy
 pymysql
 mysql-connector-python
 python-dotenv
-bcrypt
+bcrypt>=4.0.1,<5
 python-jose[cryptography]
 pydantic[email]
 alembic
 python-multipart
-passlib[bcrypt]
 google-genai
-scikit-Learn
+google-auth
+requests
+pillow

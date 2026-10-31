@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from app.core.database import get_db
-from app.core.security import get_current_user
+from app.core.security import get_current_user, require_owner
 from app.schema.contact import Contact
 from app.models.contact import ContactCreate, ContactResponse
 
@@ -20,12 +20,12 @@ def create_contact(data: ContactCreate,user=Depends(get_current_user), db: Sessi
 
 
 @router.get("/", response_model=list[ContactResponse])
-def get_contacts(db: Session = Depends(get_db)):
+def get_contacts(db: Session = Depends(get_db), owner=Depends(require_owner)):
     return db.query(Contact).all()
 
 
 @router.get("/appointments", response_model=list[ContactResponse])
-def get_appointments(db: Session = Depends(get_db)):
+def get_appointments(db: Session = Depends(get_db), owner=Depends(require_owner)):
     return db.query(Contact).filter(Contact.subject == "Showroom Visit").all()
 
 
