@@ -1,4 +1,4 @@
-from app.routes import (dashboard, product, cart, register, wishlist, order, owner, about, contact, login, charts, profile)
+from app.routes import (dashboard, product, cart, register, wishlist, order, owner, about, contact, login, charts, profile, notification, media)
 from fastapi.exceptions import RequestValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
@@ -6,13 +6,16 @@ from app.routes.get_user import router as me_router
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import EXTRA_CORS_ORIGINS
 from app.core.owner_seed import seed_owner
-from app.core.schema_check import check_user_columns
+from app.core.schema_check import check_user_columns, ensure_appointment_and_notification_schema
+from app.core import notify as notify_hub
+from starlette.middleware.gzip import GZipMiddleware
 from app.services import decorate
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import JSONResponse
 from fastapi import FastAPI, Request
 from contextlib import asynccontextmanager
 from dotenv import load_dotenv
+import asyncio
 import logging
 import os
 
@@ -29,8 +32,10 @@ os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    notify_hub.bind_loop(asyncio.get_running_loop())      # lets route handlers push live notifications
     if not check_user_columns():      # logs a clear error if `alembic upgrade head` was forgotten
         seed_owner()          # the owner account always exists and always comes from .env
+    ensure_appointment_and_notification_schema()
     yield
 
 
@@ -97,6 +102,21 @@ async def catch_all_errors(request: Request, call_next):
         return _error(500, "Something went wrong on our side. Please try again.")
 
 
+class SelectiveGZip:
+    """Compress JSON responses (the product list shrinks ~5x) but never the live notification stream."""
+    def __init__(self, app):
+        self.app = app
+        self.gzip = GZipMiddleware(app, minimum_size=1024)
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] == "http" and scope["path"].endswith("/stream"):
+            await self.app(scope, receive, send)
+        else:
+            await self.gzip(scope, receive, send)
+
+
+app.add_middleware(SelectiveGZip)
+
 app.add_middleware( CORSMiddleware,
     allow_origins=["http://localhost:5173", "http://127.0.0.1:5173", "http://localhost:5174", "http://127.0.0.1:5174", *EXTRA_CORS_ORIGINS],
     allow_credentials=True,
@@ -115,7 +135,18 @@ app.include_router(login.router)
 
 app.include_router(product.router)
 
-app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
+class CachedStaticFiles(StaticFiles):
+    """Uploaded photos get a random file name and never change, so browsers may keep them for a year."""
+    async def get_response(self, path, scope):
+        response = await super().get_response(path, scope)
+        if response.status_code == 200:
+            response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+        return response
+
+
+app.mount("/uploads", CachedStaticFiles(directory=UPLOAD_DIR), name="uploads")
+
+app.include_router(media.router)
 
 app.include_router(cart.router)
 
@@ -134,6 +165,8 @@ app.include_router(decorate.router)
 app.include_router(me_router)
 
 app.include_router(profile.router)
+
+app.include_router(notification.router)
 
 
 @app.get("/health", tags=["Health"])

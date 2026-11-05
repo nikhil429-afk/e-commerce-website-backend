@@ -4,3 +4,4 @@ from .cart import Cart
 from .wishlist import Wishlist
 from .order import Order
 from .contact import Contact
+from .notification import Notification

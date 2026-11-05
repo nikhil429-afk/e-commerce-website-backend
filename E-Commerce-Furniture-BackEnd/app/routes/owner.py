@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException
+from datetime import date, datetime
 from sqlalchemy.orm import Session
 from typing import Optional, Literal
 from pydantic import BaseModel, Field
@@ -13,6 +14,7 @@ from app.models.order import OrderStatusUpdate
 from app.schema.contact import Contact
 from app.core.database import get_db
 from app.core.security import require_owner
+from app.core.notify import notify
 
 router = APIRouter(prefix="/owner", tags=["Owner"])
 
@@ -38,6 +40,12 @@ def update_user(user_id: int, data: UserUpdate, db: Session = Depends(get_db), o
     if data.role is not None and user.id == owner.id and data.role != "owner":
         raise HTTPException(status_code=400, detail="You cannot remove your own owner access.")
 
+    changes = []
+    if data.username is not None and data.username.strip() != user.username:
+        changes.append(f"your name was changed to {data.username.strip()}")
+    if data.role is not None and data.role != user.role:
+        changes.append(f"your account type is now {data.role}")
+
     if data.username is not None:
         user.username = data.username.strip()
     if data.role is not None:
@@ -45,6 +53,8 @@ def update_user(user_id: int, data: UserUpdate, db: Session = Depends(get_db), o
 
     db.commit()
     db.refresh(user)
+    if changes and user.id != owner.id:
+        notify(db, user.id, "account_updated", "Account updated", "The store owner updated your account: " + " and ".join(changes) + ".", "/profile")
     return [ user.id, user.username, user.email, user.role, ]
 
 
@@ -104,20 +114,83 @@ def get_all_contacts(db: Session = Depends(get_db), owner=Depends(require_owner)
     ]
 
 
+def appointment_row(a) -> list:
+    return [
+        a.id,
+        a.name,
+        a.email,
+        a.phone,
+        a.message,
+        a.appointment_date,
+        a.status or "pending",
+        a.original_date,
+        a.owner_note,
+    ]
+
+
 @router.get("/appointments")
 def get_all_appointments(db: Session = Depends(get_db), owner=Depends(require_owner)):
-    appointments = db.query(Contact).filter(Contact.subject == "Showroom Visit").all()
-    return [
-        [
-            a.id,
-            a.name,
-            a.email,
-            a.phone,
-            a.message,
-            a.appointment_date,
-        ]
-        for a in appointments
-    ]
+    appointments = db.query(Contact).filter(Contact.subject == "Showroom Visit").order_by(Contact.id.desc()).all()
+    return [appointment_row(a) for a in appointments]
+
+
+class AppointmentDecision(BaseModel):
+    action: Literal["accept", "decline", "adjust"]
+    new_date: Optional[str] = Field(default=None, description="YYYY-MM-DD, required for 'adjust'")
+    note: Optional[str] = Field(default=None, max_length=300)
+
+
+def _pretty(d: Optional[str]) -> str:
+    try:
+        return datetime.strptime(d, "%Y-%m-%d").strftime("%d %b %Y")
+    except (TypeError, ValueError):
+        return d or "the requested date"
+
+
+@router.patch("/appointments/{appointment_id}")
+def decide_appointment(appointment_id: int, data: AppointmentDecision, db: Session = Depends(get_db), owner=Depends(require_owner)):
+    appt = db.query(Contact).filter(Contact.id == appointment_id, Contact.subject == "Showroom Visit").first()
+    if not appt:
+        raise HTTPException(status_code=404, detail="Appointment not found")
+
+    note = (data.note or "").strip() or None
+    current = appt.appointment_date
+
+    if data.action == "adjust":
+        try:
+            new_day = datetime.strptime((data.new_date or "").strip(), "%Y-%m-%d").date()
+        except ValueError:
+            raise HTTPException(status_code=422, detail="Please choose a valid new date.")
+        if new_day < date.today():
+            raise HTTPException(status_code=422, detail="The new date cannot be in the past.")
+        if new_day.isoformat() == (current or ""):
+            raise HTTPException(status_code=422, detail="That is already the appointment date. Pick a different one.")
+        if not appt.original_date:
+            appt.original_date = current
+        appt.appointment_date = new_day.isoformat()
+        appt.status = "rescheduled"
+    elif data.action == "accept":
+        appt.status = "accepted"
+    else:
+        appt.status = "declined"
+
+    appt.owner_note = note
+    appt.decided_at = datetime.utcnow()
+    db.commit()
+    db.refresh(appt)
+
+    extra = f" Note from the store: {note}" if note else ""
+    if data.action == "accept":
+        notify(db, appt.user_id, "appointment_accepted", "Appointment confirmed",
+               f"Your showroom visit on {_pretty(appt.appointment_date)} has been accepted. We look forward to seeing you!{extra}", "/contact")
+    elif data.action == "decline":
+        notify(db, appt.user_id, "appointment_declined", "Appointment declined",
+               f"Sorry, we can't host your showroom visit on {_pretty(current)}. You are welcome to request another date.{extra}", "/contact")
+    else:
+        notify(db, appt.user_id, "appointment_rescheduled", "Appointment date changed",
+               f"Your showroom visit was moved from {_pretty(current)} to {_pretty(appt.appointment_date)}.{extra}", "/contact")
+
+    return appointment_row(appt)
 
 
 @router.post("/products")
@@ -225,10 +298,14 @@ def update_order_status(order_id: int, data: OrderStatusUpdate, db: Session = De
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
 
+    previous = order.status
     order.status = data.status
 
     db.commit()
     db.refresh(order)
+    if data.status != previous:
+        notify(db, order.user_id, "order_updated", "Order update",
+               f"Your order #{order.id} ({order.name}) is now {data.status}.", "/cart")
     return [
     order.id,
     order.user_name,
