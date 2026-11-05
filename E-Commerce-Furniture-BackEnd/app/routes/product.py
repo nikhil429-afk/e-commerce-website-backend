@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Response
 from app.core.security import require_owner
 from app.core.config import MAX_IMAGE_BYTES
 from app.schema.product import Product, Images
@@ -21,18 +21,39 @@ ALLOWED_EXTENSIONS = {"jpg", "jpeg", "png", "webp", "avif", "gif"}
 router = APIRouter(prefix="/products", tags=["Products"])
 
 
+LIST_CACHE = "public, max-age=20, stale-while-revalidate=120"   # browsers/CDN may reuse a product list for a few seconds
+
+
+def _products_payload(db: Session, category: Optional[str] = None) -> list:
+    """Every product with its extra images using TWO queries in total (it used to be one query per product,
+    which is what made the products page slow on a remote database)."""
+    query = db.query(Product)
+    if category:
+        query = query.filter(Product.category == category)
+    products = query.all()
+    if not products:
+        return []
+
+    extra = {}
+    rows = db.query(Images).filter(Images.product_id.in_([p.id for p in products])).order_by(Images.id).all()
+    for img in rows:
+        extra.setdefault(img.product_id, []).append(img.file_path)
+
+    return [_product_dict(p, db, extra.get(p.id, [])) for p in products]
+
+
 # GET /products (no slash) is served by routes/dashboard.py; the home page calls GET /products/ (with slash).
 @router.get("/")
-def get_all_products(db: Session = Depends(get_db)):
-    return [_product_dict(p, db) for p in db.query(Product).all()]
+def get_all_products(response: Response, db: Session = Depends(get_db)):
+    response.headers["Cache-Control"] = LIST_CACHE
+    return _products_payload(db)
 
 
-def _product_dict(p, db) -> dict:
-    extra_images = db.query(Images).filter(Images.product_id == p.id).all()
+def _product_dict(p, db, extra_images: Optional[List[str]] = None) -> dict:
+    if extra_images is None:                       # single product (create / update): look its images up
+        extra_images = [i.file_path for i in db.query(Images).filter(Images.product_id == p.id).order_by(Images.id).all()]
     all_images = [p.image] if p.image else []
-
-    for img in extra_images:
-        all_images.append(img.file_path)
+    all_images.extend(extra_images)
 
     return {
         "id": p.id,
@@ -217,25 +238,31 @@ def delete_product(product_id: int, db: Session = Depends(get_db), owner=Depends
 
 
 @router.get("/almirahs")
-def get_almirahs(db: Session = Depends(get_db)):
-    return [_product_dict(p, db) for p in db.query(Product).filter(Product.category == "almirahs").all()]
+def get_almirahs(response: Response, db: Session = Depends(get_db)):
+    response.headers["Cache-Control"] = LIST_CACHE
+    return _products_payload(db, "almirahs")
 
 @router.get("/beds")
-def get_beds(db: Session = Depends(get_db)):
-    return [_product_dict(p, db) for p in db.query(Product).filter(Product.category == "beds").all()]
+def get_beds(response: Response, db: Session = Depends(get_db)):
+    response.headers["Cache-Control"] = LIST_CACHE
+    return _products_payload(db, "beds")
 
 @router.get("/chairs")
-def get_chairs(db: Session = Depends(get_db)):
-    return [_product_dict(p, db) for p in db.query(Product).filter(Product.category == "chairs").all()]
+def get_chairs(response: Response, db: Session = Depends(get_db)):
+    response.headers["Cache-Control"] = LIST_CACHE
+    return _products_payload(db, "chairs")
 
 @router.get("/dinings")
-def get_dinings(db: Session = Depends(get_db)):
-    return [_product_dict(p, db) for p in db.query(Product).filter(Product.category == "dinings").all()]
+def get_dinings(response: Response, db: Session = Depends(get_db)):
+    response.headers["Cache-Control"] = LIST_CACHE
+    return _products_payload(db, "dinings")
 
 @router.get("/sofas")
-def get_sofas(db: Session = Depends(get_db)):
-    return [_product_dict(p, db) for p in db.query(Product).filter(Product.category == "sofas").all()]
+def get_sofas(response: Response, db: Session = Depends(get_db)):
+    response.headers["Cache-Control"] = LIST_CACHE
+    return _products_payload(db, "sofas")
 
 @router.get("/tables")
-def get_tables(db: Session = Depends(get_db)):
-    return [_product_dict(p, db) for p in db.query(Product).filter(Product.category == "tables").all()]
+def get_tables(response: Response, db: Session = Depends(get_db)):
+    response.headers["Cache-Control"] = LIST_CACHE
+    return _products_payload(db, "tables")

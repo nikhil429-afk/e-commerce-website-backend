@@ -14,3 +14,9 @@ class Contact(Base):
     appointment_date = Column(String(100), nullable=True)
     message = Column(Text, nullable=True)
     created_at = Column(DateTime, server_default=func.now())
+
+    # Showroom-visit requests: the owner can accept, decline or move the date.
+    status = Column(String(20), nullable=False, default="pending", server_default="pending")
+    original_date = Column(String(100), nullable=True)      # the date the customer asked for, kept when the owner moves it
+    owner_note = Column(String(300), nullable=True)
+    decided_at = Column(DateTime, nullable=True)

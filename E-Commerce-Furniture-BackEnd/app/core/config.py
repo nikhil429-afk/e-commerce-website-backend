@@ -12,9 +12,7 @@ if not DATABASE_URL:
 
 SECRET_KEY = os.getenv("SECRET_KEY")
 ALGORITHM = os.getenv("ALGORITHM", "HS256")
-ACCESS_TOKEN_EXPIRE_MINUTES = int(
-    os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", 180)
-)
+ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", 180))
 
 OWNER_NAME = os.getenv("OWNER_NAME", "Owner")
 OWNER_EMAIL = (os.getenv("OWNER_EMAIL") or "").strip().lower()
